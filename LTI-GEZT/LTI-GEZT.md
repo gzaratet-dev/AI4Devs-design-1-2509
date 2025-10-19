@@ -400,9 +400,210 @@ Rel(notification_service, cache_manager, "Lee/Escribe")
 
 @enduml
 ```
+## 5. Diagramas de Secuencia
 
-## 5. Anexos
+A continuación se incluyen diagramas de secuencia que ilustran flujos críticos del sistema.
 
-### 5.1 Prompts de Diseño
+### 5.1 Screening asistido por IA
+```plantuml
+@startuml
+actor Reclutador
+participant "Candidate Service" as CS
+participant "AI Service" as AI
+participant "Job Service" as JS
+Reclutador -> CS : Subir CV / link (jobId)
+CS -> AI : Request scoring (CV, jobId, historial)
+AI -> AI : Procesar CV, features, modelo
+AI --> CS : Score, tags (técnico, cultural, riesgo)
+CS -> JS : Crear/actualizar Aplicación (score)
+CS --> Reclutador : Shortlist ordenada + tags
+@enduml
+```
+
+### 5.2 Panel colaborativo de evaluación
+```plantuml
+@startuml
+actor Reclutador
+actor "Hiring Manager" as HM
+actor Entrevistador
+participant "Collab Service" as CSvc
+participant "Candidate Service" as CServ
+participant "Notification Service" as N
+Reclutador -> CServ : Compartir tarjeta de candidato
+CServ -> CSvc : Publicar tarjeta en panel
+CSvc -> N : Notificar panel a HM y Entrevistador
+HM -> CSvc : Enviar feedback estructurado
+Entrevistador -> CSvc : Enviar feedback estructurado
+CSvc -> CSvc : Consolidar scores, detectar discrepancias
+alt Discrepancia alta
+  CSvc -> N : Sugerir reunión
+else Consenso
+  CSvc -> CServ : Actualizar estado (avanzar/descartar)
+end
+CSvc --> Reclutador : Resultado consolidado
+@enduml
+```
+
+### 5.2.1 Panel colaborativo de evaluación (DETALLADO)
+
+Objetivo: Capturar feedback estructurado, consolidar evidencia y acelerar decisiones con trazabilidad y mínima fricción.
+
+Resumen del flujo:
+- Reclutador comparte la tarjeta del candidato → panel colabora en línea.
+- Miembros del panel rellenan un formulario estructurado (scores + etiquetas + comentario breve).
+- Servicio de Colaboración valida, persiste y emite notificaciones.
+- Motor de consolidación agrega scores (algoritmo robusto), detecta discrepancias y decide si escalar a reunión o aplicar regla automática.
+- Todas las acciones generan eventos y registro de auditoría.
+
+Campos del formulario de feedback (recomendado):
+- Score técnico (0-10)
+- Score cultural/encaje (0-10)
+- Score potencial/crecimiento (0-10)
+- Recomendación (Avanzar / Entrevista / Rechazar)
+- Tags rápidas (p. ej. Seniority, Stack, Riesgo)
+- Comentario libre (máx 500 chars)
+- Confidencialidad / visibilidad
+
+Reglas de agregación (sugerencia):
+- Usar mediana para cada dimensión + conteo de evaluadores.
+- Detectar outliers (desviación > 1.5 IQR) y marcar para revisión.
+- Si desviación estándar entre evaluadores > 2 puntos en any dimension → "Discrepancia alta".
+- Si >=75% de evaluadores recomiendan "Avanzar" → decisión automática "Avanzar".
+- Registrar siempre la decisión automática / manual en el audit log con versionado.
+
+Notificaciones y permisos:
+- Notificar hiring manager(s) y entrevistadores asignados al publicar.
+- Permisos por rol: solo reclutadores y managers pueden forzar decisión final; entrevistadores pueden proponer.
+- Historial visible en la tarjeta del candidato con timestamp y usuario.
+
+### 5.2.1.1 Diagrama: publicación, recolección y consolidación
+```plantuml
+@startuml
+actor Reclutador
+actor "Hiring Manager" as HM
+actor Entrevistador
+participant "Candidate Service" as CServ
+participant "Collab Service" as CSvc
+participant "Notification Service" as N
+participant "Audit Service" as Audit
+participant "AI Assessor" as AI
+
+Reclutador -> CServ : Compartir tarjeta (candidateId, panelIds, contexto)
+CServ -> CSvc : Publicar tarjeta en panel (card payload)
+CSvc -> N : Notificar panel (HM, Entrevistador)
+N -> HM : Notificación
+N -> Entrevistador : Notificación
+
+HM -> CSvc : Enviar feedback estructurado (form)
+Entrevistador -> CSvc : Enviar feedback estructurado (form)
+CSvc -> Audit : Persistir feedback raw (candidateId, userId, form, timestamp)
+CSvc -> CSvc : Normalizar scores, tags
+CSvc -> AI : Request: sugerir peso/insight (opcional)
+AI --> CSvc : Insights (bias flags, recommended weight)
+
+CSvc -> CSvc : Agregar scores (mediana), detectar outliers, calcular stddev
+alt Discrepancia alta
+  CSvc -> N : Sugerir reunión + enviar resumen de discrepancias
+  CSvc -> Audit : Registrar escalado a meeting
+else Consenso fuerte / regla automática
+  CSvc -> CServ : Actualizar estado de aplicación (avanzar/descartar), anotar decisionSource
+  CSvc -> Audit : Registrar decisión automatizada
+end
+
+CSvc --> Reclutador : Resultado consolidado + evidencia (scores, comentarios, tags)
+@enduml
+```
+### 5.2.1.2 Diagrama: resolución de discrepancias (reunión y decisión)
+```plantuml
+@startuml
+actor Reclutador
+actor "Hiring Manager" as HM
+actor Entrevistador
+participant "Collab Service" as CSvc
+participant "Calendar Service" as Cal
+participant "Meeting Service" as Meet
+participant "Audit Service" as Audit
+participant "Candidate Service" as CServ
+
+CSvc -> Cal : Proponer franjas (panelIds, dur=30m)
+Cal --> CSvc : Slots disponibles
+CSvc -> Meet : Crear meeting (agenda, resumen discrepancias, material adjunto)
+Meet -> Cal : Reservar evento
+Cal --> HM : Invitación calendario
+Cal --> Entrevistador : Invitación calendario
+Meet -> CSvc : Confirmación reunión
+CSvc -> Audit : Registrar meeting + participantes + snapshot de feedback
+
+HM -> Meet : Durante reunión: acordar acción (avanzar/descartar/entrevista más técnica)
+Meet -> CServ : Aplicar decisión acordada (actualizar estado)
+CServ -> Audit : Registrar decisión final (userIds, rationale)
+CServ --> CSvc : Notificar resultado al panel
+@enduml
+```
+Notas operativas:
+
+- Mantener snapshot inmutable de feedback antes de consolidación para auditoría.
+- Exponer endpoint para exportar evidence pack (scores, comentarios, timeline) para compliance o HR reviews.
+- Considerar UI: highlights visuales para discrepancias, filtro por tags y timeline inline.
+### 5.3 Automatización de oferta y cierre
+```plantuml
+@startuml
+actor Reclutador
+actor Candidato
+participant "Job Service" as JS
+participant "Notification Service" as N
+participant "Onboarding Service" as OB
+Reclutador -> JS : Generar oferta (plantilla, reglas bandas salariales)
+JS -> N : Enviar oferta al candidato (email/in-app)
+N -> Candidato : Entrega oferta
+Candidato -> N : Responder (acepta/negocia/rechaza)
+N -> JS : Actualizar estado de oferta
+alt Acepta
+  JS -> OB : Crear entrada onboarding, notificar RRHH
+else Negocia
+  JS -> Reclutador : Registrar contraoferta, sugerir pasos
+end
+JS --> Reclutador : Notificar resultado
+@enduml
+```
+
+### 5.4 Programación automática de entrevistas
+```plantuml
+@startuml
+actor Reclutador
+actor Candidato
+actor Entrevistador
+participant "Scheduling Service" as Sched
+participant "Calendar Service" as Cal
+participant "Notification Service" as N
+Reclutador -> Sched : Solicitar franjas (candid, entrevistador, dur)
+Sched -> Cal : Consultar disponibilidad (candidato, entrevistador)
+Cal --> Sched : Slots disponibles
+Sched -> Cal : Reservar evento
+Cal --> Candidato : Invitación (email/ICS)
+Cal --> Entrevistador : Invitación (email/ICS)
+N -> Reclutador : Confirmación + recordatorios
+@enduml
+```
+
+### 5.5 Pipeline IA: entrenamiento y predicción (simplificado)
+```plantuml
+@startuml
+participant "Data Pipeline" as DP
+participant "Feature Store" as FS
+participant "Training Service" as T
+participant "Model Registry" as MR
+participant "AI Service (inference)" as AI
+DP -> FS : Ingest datos históricos (candidatos, hires, outcomes)
+FS -> T : Proveer features
+T -> MR : Subir nuevo modelo (metrics)
+MR -> AI : Desplegar modelo (versión)
+AI -> AI : Inferencia en requests (scoring)
+AI --> "Candidate Service" : Scores para applications
+@enduml
+```
+## 6. Anexos
+
+### 6.1 Prompts de Diseño
 1. **Product Manager Senior**: Definición inicial del producto, funcionalidades y casos de uso.
 2. **Arquitecto de Software Senior**: Diseño de la arquitectura técnica, incluyendo modelo de datos (ER), arquitectura de microservicios y componentes detallados del sistema. Ver detalles en `prompts.md`.
