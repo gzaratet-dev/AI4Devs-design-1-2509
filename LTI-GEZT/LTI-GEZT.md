@@ -1,6 +1,8 @@
-# LTI-GEZT
+# LTI - Applicant Tracking System
 
-## 1. Descripción
+## 1. Visión General del Producto
+
+### 1.1 Descripción
 LTI es un ATS moderno diseñado para reducir el trabajo manual de los equipos de RRHH, acelerar la toma de decisiones y mejorar la colaboración entre reclutadores y hiring managers mediante automatizaciones inteligentes y apoyo de IA. Su propuesta de valor única (PVU) es combinar un flujo colaborativo en tiempo real con motores de IA que priorizan candidatos según criterios dinámicos de ajuste cultural y técnico, y plantillas de comunicación que autopersonalizan mensajes.
 
 Ventajas competitivas frente a Workday/Lever/Greenhouse:
@@ -8,7 +10,12 @@ Ventajas competitivas frente a Workday/Lever/Greenhouse:
 - Panel colaborativo en tiempo real con comentarios estructurados y tareas asignables (reduce reuniones y emails).
 - Automatizaciones end‑to‑end (sourcing → screening → scheduling → oferta) con trazabilidad y auditoría.
 
-## 2. Funciones Principales
+### 1.2 Pilares Estratégicos
+1. **Eficiencia para HR:** Reducir drásticamente el trabajo manual
+2. **Colaboración en tiempo real:** Mejorar la comunicación entre reclutadores y managers
+3. **Automatización Inteligente:** Usar IA/ML para filtrar y sugerir mejor
+
+### 1.3 Funciones Principales
 1. Dashboard colaborativo de contratación: Vista central con candidatos, estado del proceso y comentarios en tiempo real. (Pilares: colaboración, eficiencia)
 2. Screening asistido por IA: Scoring que combina CV, entrevista y datos históricos para ordenar shortlists. (Pilares: automatización, eficiencia)
 3. Workflows y automatizaciones: Plantillas y pipelines configurables que ejecutan acciones (emails, entrevistas, tareas). (Pilares: automatización)
@@ -17,7 +24,9 @@ Ventajas competitivas frente a Workday/Lever/Greenhouse:
 6. Auditoría y cumplimiento: Registro inmutable de decisiones y comunicación para cumplimiento legal. (Pilares: eficiencia)
 7. Biblioteca de templates y playbooks de sourcing: Mejores prácticas reutilizables y A/B testing de mensajes. (Pilares: automatización)
 
-## 3. Lean Canvas
+## 2. Modelo de Negocio
+
+### 2.1 Lean Canvas
 Problema:
 - Procesos manuales, baja colaboración y sesgo en screening.
 
@@ -65,7 +74,9 @@ CO -right-> R
 @enduml
 ```
 
-## 4. Casos de Uso
+## 3. Análisis Funcional
+
+### 3.1 Casos de Uso
 
 ### Caso de Uso 1: Screening asistido por IA
 Actores: Reclutador, Sistema LTI (IA)  
@@ -89,6 +100,7 @@ R --> S : Marcar favoritos
 ```
 
 ### Caso de Uso 2: Panel colaborativo de evaluación
+
 Actores: Reclutador, Hiring Manager, Entrevistador  
 Objetivo: Capturar feedback estructurado y decidir sin reuniones largas.  
 Flujo principal:
@@ -130,6 +142,267 @@ Candidato -> W : Responder (aceptar/negociar)
 W --> Reclutador : Notificar resultado
 @enduml
 ```
+## 4. Arquitectura Técnica
 
-## Prompts usados
-1. Prompt principal (Product Manager Senior): contenido usado desde `prompts.md` para generar este documento.
+### 4.1 Decisiones de Arquitectura
+
+La arquitectura de LTI se ha diseñado siguiendo estos principios clave:
+
+1. **Arquitectura de Microservicios**
+   - Permite escalabilidad independiente de componentes
+   - Facilita la evolución tecnológica por dominio
+   - Mejora la resiliencia del sistema
+   - Habilita el desarrollo en paralelo por equipos
+
+2. **Patrón Event-Driven**
+   - Facilita la integración asíncrona entre servicios
+   - Permite reaccionar en tiempo real a cambios
+   - Mejora la escalabilidad y rendimiento
+
+3. **Diseño Multi-tenant**
+   - Aislamiento de datos por empresa
+   - Configuración flexible por cliente
+   - Optimización de recursos compartidos
+
+### 4.2 Modelo de Datos
+
+```plantuml
+@startuml ERD
+!define primary_key(x) <b><color:#b8861b><&key></color> x</b>
+!define foreign_key(x) <color:#aaaaaa><&key></color> x
+!define column(x) <color:#efefef><&media-record></color> x
+
+hide circle
+hide empty methods
+
+entity "Empresa" as company {
+  primary_key(id): UUID
+  column(nombre): string
+  column(dominio): string
+  column(plan): string
+  column(configuracion): jsonb
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "Usuario" as user {
+  primary_key(id): UUID
+  foreign_key(empresaId): UUID
+  column(email): string
+  column(nombre): string
+  column(rol): enum
+  column(estado): enum
+  column(ultimoAcceso): timestamp
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "EquipoContratacion" as team {
+  primary_key(id): UUID
+  foreign_key(empresaId): UUID
+  column(nombre): string
+  column(descripcion): string
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "OfertaTrabajo" as job {
+  primary_key(id): UUID
+  foreign_key(empresaId): UUID
+  foreign_key(equipoId): UUID
+  column(titulo): string
+  column(descripcion): text
+  column(requisitos): jsonb
+  column(estado): enum
+  column(ubicacion): string
+  column(tipoContrato): string
+  column(salarioRango): jsonb
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "Candidato" as candidate {
+  primary_key(id): UUID
+  foreign_key(empresaId): UUID
+  column(nombre): string
+  column(email): string
+  column(telefono): string
+  column(cvUrl): string
+  column(fuente): string
+  column(etiquetas): jsonb[]
+  column(metadata): jsonb
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "Aplicacion" as application {
+  primary_key(id): UUID
+  foreign_key(candidatoId): UUID
+  foreign_key(ofertaId): UUID
+  column(estado): enum
+  column(etapa): string
+  column(scoreIA): decimal
+  column(notas): text
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+entity "Comentario" as comment {
+  primary_key(id): UUID
+  foreign_key(aplicacionId): UUID
+  foreign_key(usuarioId): UUID
+  column(contenido): text
+  column(tipo): enum
+  column(metadata): jsonb
+  column(createdAt): timestamp
+}
+
+entity "Entrevista" as interview {
+  primary_key(id): UUID
+  foreign_key(aplicacionId): UUID
+  foreign_key(entrevistadorId): UUID
+  column(fecha): timestamp
+  column(tipo): enum
+  column(estado): enum
+  column(feedback): jsonb
+  column(createdAt): timestamp
+  column(updatedAt): timestamp
+}
+
+company ||--o{ user : tiene
+company ||--o{ team : tiene
+company ||--o{ job : publica
+company ||--o{ candidate : gestiona
+
+team ||--o{ job : gestiona
+job ||--o{ application : recibe
+
+candidate ||--o{ application : realiza
+application ||--o{ comment : tiene
+application ||--o{ interview : programa
+
+user ||--o{ comment : crea
+user ||--o{ interview : conduce
+
+@enduml
+```
+
+### 4.3 Diseño del Sistema
+
+El sistema LTI está diseñado siguiendo una **arquitectura de microservicios** con un enfoque event-driven. Esta elección se justifica por:
+
+1. **Escalabilidad independiente**: Cada servicio puede escalar según sus necesidades específicas (ej: el servicio de IA puede requerir más recursos durante picos de análisis).
+2. **Flexibilidad tecnológica**: Permite usar diferentes tecnologías por servicio (ej: Node.js para tiempo real, Python para ML).
+3. **Resiliencia**: Los servicios pueden fallar de manera aislada sin afectar todo el sistema.
+4. **Desarrollo ágil**: Equipos diferentes pueden trabajar en servicios distintos sin interferencias.
+
+```plantuml
+@startuml C4_Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(client, "Cliente Web", "Navegador web (SPA)")
+Person(mobile, "Cliente Móvil", "App móvil")
+
+System_Boundary(c1, "LTI Platform") {
+    Container(api_gateway, "API Gateway", "Kong/Traefik", "Enrutamiento, autenticación, rate limiting")
+    
+    Container(auth_service, "Servicio de Autenticación", "Node.js/Express", "Gestión de identidad y acceso")
+    ContainerDb(auth_db, "Auth Database", "PostgreSQL", "Usuarios, roles, permisos")
+    
+    Container(job_service, "Servicio de Ofertas", "Node.js/Express", "Gestión de ofertas y equipos")
+    ContainerDb(job_db, "Jobs Database", "PostgreSQL", "Ofertas, equipos, workflows")
+    
+    Container(candidate_service, "Servicio de Candidatos", "Node.js/Express", "Gestión de candidatos y aplicaciones")
+    ContainerDb(candidate_db, "Candidates Database", "PostgreSQL", "Candidatos, aplicaciones, entrevistas")
+    
+    Container(collab_service, "Servicio de Colaboración", "Node.js/Socket.io", "Tiempo real y notificaciones")
+    ContainerDb(collab_db, "Collab Database", "MongoDB", "Comentarios, actividad, notificaciones")
+    
+    Container(ai_service, "Servicio de IA", "Python/FastAPI", "Scoring y análisis")
+    ContainerDb(ai_db, "AI Database", "PostgreSQL", "Modelos, métricas, histórico")
+    
+    Container(notification_service, "Servicio de Notificaciones", "Node.js/Express", "Emails, push, in-app")
+    
+    Container(event_bus, "Event Bus", "Apache Kafka", "Comunicación asíncrona entre servicios")
+    
+    Container(file_service, "Servicio de Archivos", "Node.js/Express", "Gestión de CVs y documentos")
+    ContainerDb(file_storage, "Object Storage", "S3", "Almacenamiento de archivos")
+}
+
+Rel(client, api_gateway, "Usa", "HTTPS/WSS")
+Rel(mobile, api_gateway, "Usa", "HTTPS/WSS")
+
+Rel(api_gateway, auth_service, "Autentica", "HTTPS")
+Rel(api_gateway, job_service, "Enruta", "HTTPS")
+Rel(api_gateway, candidate_service, "Enruta", "HTTPS")
+Rel(api_gateway, collab_service, "Enruta", "HTTPS/WSS")
+
+Rel(auth_service, auth_db, "Lee/Escribe", "SQL")
+Rel(job_service, job_db, "Lee/Escribe", "SQL")
+Rel(candidate_service, candidate_db, "Lee/Escribe", "SQL")
+Rel(collab_service, collab_db, "Lee/Escribe", "MongoDB")
+Rel(ai_service, ai_db, "Lee/Escribe", "SQL")
+Rel(file_service, file_storage, "Lee/Escribe", "S3 API")
+
+Rel(job_service, event_bus, "Publica/Suscribe", "Kafka")
+Rel(candidate_service, event_bus, "Publica/Suscribe", "Kafka")
+Rel(collab_service, event_bus, "Publica/Suscribe", "Kafka")
+Rel(ai_service, event_bus, "Publica/Suscribe", "Kafka")
+Rel(notification_service, event_bus, "Suscribe", "Kafka")
+
+@enduml
+```
+
+### 4.4 Componentes Principales
+
+#### 4.4.1 Servicio de Colaboración en Tiempo Real
+
+El Servicio de Colaboración es crítico para cumplir con el requisito de colaboración en tiempo real. A continuación se detalla su arquitectura interna:
+
+```plantuml
+@startuml C4_Component
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Container_Boundary(collab_service, "Servicio de Colaboración") {
+    Component(api_controller, "API Controller", "Express.js", "REST endpoints para operaciones síncronas")
+    Component(websocket_manager, "WebSocket Manager", "Socket.io", "Gestión de conexiones y eventos en tiempo real")
+    Component(session_manager, "Session Manager", "Redis", "Gestión de sesiones y presencia")
+    
+    Component(comment_service, "Servicio de Comentarios", "TypeScript", "Lógica de negocio para comentarios")
+    Component(notification_service, "Servicio de Notificaciones", "TypeScript", "Lógica de notificaciones en tiempo real")
+    Component(activity_service, "Servicio de Actividad", "TypeScript", "Tracking de actividad y analytics")
+    
+    Component(event_handler, "Event Handler", "TypeScript", "Procesamiento de eventos del sistema")
+    Component(db_connector, "DB Connector", "Mongoose", "Acceso a datos MongoDB")
+    Component(kafka_client, "Kafka Client", "KafkaJS", "Integración con Event Bus")
+    
+    Component(cache_manager, "Cache Manager", "Redis", "Caché de datos frecuentes")
+}
+
+Rel(api_controller, comment_service, "Usa")
+Rel(api_controller, notification_service, "Usa")
+Rel(api_controller, activity_service, "Usa")
+
+Rel(websocket_manager, session_manager, "Gestiona")
+Rel(websocket_manager, notification_service, "Emite")
+Rel(websocket_manager, comment_service, "Procesa")
+
+Rel(comment_service, db_connector, "Persiste")
+Rel(notification_service, db_connector, "Persiste")
+Rel(activity_service, db_connector, "Persiste")
+
+Rel(event_handler, kafka_client, "Consume/Produce")
+Rel(event_handler, notification_service, "Dispara")
+Rel(event_handler, activity_service, "Registra")
+
+Rel(comment_service, cache_manager, "Lee/Escribe")
+Rel(notification_service, cache_manager, "Lee/Escribe")
+
+@enduml
+```
+
+## 5. Anexos
+
+### 5.1 Prompts de Diseño
+1. **Product Manager Senior**: Definición inicial del producto, funcionalidades y casos de uso.
+2. **Arquitecto de Software Senior**: Diseño de la arquitectura técnica, incluyendo modelo de datos (ER), arquitectura de microservicios y componentes detallados del sistema. Ver detalles en `prompts.md`.
