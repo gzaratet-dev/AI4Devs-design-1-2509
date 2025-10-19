@@ -1,6 +1,17 @@
 # Prompts Usados en el Diseño de LTI
 **_Generados con Gemini 2.5 Pro y ejecutados en modo agente con Claude Sonnet 3.5_**
 
+## Prompt Origen
+
+Analiza el ejercicio que se encuentra en el archivo Readme.md y haz lo siguiente:
+- Identifica qué roles expertos se necesitan para resolver el problema. Mi criterio me dice que al menos un product manager y un arquitecto de software pueden resolver el problema.
+
+- ¿Qué nivel de experiencia deben tener?
+
+- Una vez identificados genera prompts  para cada uno de ellos (basándose en ese "expertis" y experiencia), para que sean ejecutados por un agente en específico.
+
+- Genera el orden en que deben ser ejecutados dichos agentes.
+
 ## Product Manager Senior
 
 Actúa como un **Product Manager Senior** con más de 10 años de experiencia en el sector HR Tech y en el lanzamiento de productos B2B SaaS desde cero. Tu especialidad es identificar los "pain points" de los departamentos de Recursos Humanos y traducirlos en funcionalidades de producto que aporten un valor diferencial claro.
